@@ -9,16 +9,115 @@ const REFRESH_INTERVAL = 30000; // 30 seconds
 let trackedSymbols = JSON.parse(localStorage.getItem('trackedSymbols')) || [...DEFAULT_SYMBOLS];
 let stockData = {};
 let refreshTimer = null;
+let useDemoData = false;
+
+// ---- Demo Data (realistic stock snapshots with slight randomization) ----
+
+const DEMO_STOCKS = {
+    'AAPL':  { name: 'Apple Inc.',           basePrice: 237.50, marketCap: 3.62e12, avgVol: 58_400_000, w52High: 260.10, w52Low: 164.08 },
+    'MSFT':  { name: 'Microsoft Corp.',      basePrice: 432.80, marketCap: 3.22e12, avgVol: 22_100_000, w52High: 468.35, w52Low: 366.50 },
+    'GOOGL': { name: 'Alphabet Inc.',        basePrice: 196.00, marketCap: 2.41e12, avgVol: 25_700_000, w52High: 207.05, w52Low: 150.22 },
+    'AMZN':  { name: 'Amazon.com Inc.',      basePrice: 228.40, marketCap: 2.39e12, avgVol: 44_300_000, w52High: 242.52, w52Low: 166.21 },
+    'TSLA':  { name: 'Tesla Inc.',           basePrice: 394.50, marketCap: 1.27e12, avgVol: 98_500_000, w52High: 488.54, w52Low: 138.80 },
+    'NVDA':  { name: 'NVIDIA Corp.',         basePrice: 147.00, marketCap: 3.59e12, avgVol: 228_000_000, w52High: 153.13, w52Low: 75.61 },
+    'META':  { name: 'Meta Platforms Inc.',  basePrice: 692.10, marketCap: 1.76e12, avgVol: 16_800_000, w52High: 740.91, w52Low: 414.50 },
+    'JPM':   { name: 'JPMorgan Chase & Co.', basePrice: 268.20, marketCap: 7.58e11, avgVol: 9_200_000, w52High: 280.25, w52Low: 182.65 },
+    '^GSPC': { name: 'S&P 500',             basePrice: 6025.99, marketCap: 0, avgVol: 0, w52High: 6128.18, w52Low: 4953.56 },
+    '^DJI':  { name: 'Dow Jones',           basePrice: 44544.66, marketCap: 0, avgVol: 0, w52High: 45073.63, w52Low: 37611.56 },
+    '^IXIC': { name: 'NASDAQ Composite',    basePrice: 19627.44, marketCap: 0, avgVol: 0, w52High: 20204.58, w52Low: 15222.77 },
+    '^VIX':  { name: 'CBOE Volatility',     basePrice: 16.54, marketCap: 0, avgVol: 0, w52High: 65.73, w52Low: 10.62 },
+};
+
+function generateDemoQuote(symbol) {
+    const template = DEMO_STOCKS[symbol];
+    if (!template) {
+        // Generate plausible data for unknown symbols
+        const base = 50 + Math.random() * 300;
+        return buildDemoResult(symbol, symbol, base, base * (0.7 + Math.random() * 0.3) * 1e9,
+            Math.floor(5e6 + Math.random() * 50e6), base * 1.2, base * 0.7);
+    }
+    return buildDemoResult(symbol, template.name, template.basePrice, template.marketCap,
+        template.avgVol, template.w52High, template.w52Low);
+}
+
+function buildDemoResult(symbol, name, basePrice, marketCap, avgVol, w52High, w52Low) {
+    // Add random fluctuation (-3% to +3%)
+    const fluctuation = (Math.random() - 0.48) * 0.06; // slight upward bias
+    const price = +(basePrice * (1 + fluctuation)).toFixed(2);
+    const prevClose = +(basePrice * (1 + (Math.random() - 0.5) * 0.02)).toFixed(2);
+    const change = +(price - prevClose).toFixed(2);
+    const changePercent = +((change / prevClose) * 100).toFixed(2);
+
+    // Simulated 5-day closes
+    const closes = [];
+    let p = basePrice * (1 - Math.random() * 0.03);
+    for (let i = 0; i < 5; i++) {
+        p *= 1 + (Math.random() - 0.48) * 0.025;
+        closes.push(+p.toFixed(2));
+    }
+    closes[closes.length - 1] = price;
+
+    const dailyReturns = [];
+    for (let i = 1; i < closes.length; i++) {
+        dailyReturns.push((closes[i] - closes[i - 1]) / closes[i - 1]);
+    }
+
+    const periodHigh = Math.max(...closes) * (1 + Math.random() * 0.005);
+    const periodLow = Math.min(...closes) * (1 - Math.random() * 0.005);
+
+    const currentVolume = Math.floor(avgVol * (0.6 + Math.random() * 0.9));
+    const volumeRatio = avgVol > 0 ? +(currentVolume / avgVol).toFixed(2) : 1;
+
+    const volatility = computeVolatility(dailyReturns);
+    const momentum = periodHigh !== periodLow
+        ? +((price - periodLow) / (periodHigh - periodLow) * 100).toFixed(1)
+        : 50;
+
+    return {
+        symbol,
+        name,
+        price,
+        prevClose,
+        change,
+        changePercent,
+        volume: currentVolume,
+        avgVolume: avgVol,
+        volumeRatio,
+        marketCap,
+        currency: 'USD',
+        exchange: 'DEMO',
+        periodHigh,
+        periodLow,
+        volatility,
+        momentum,
+        dailyReturns,
+        fiftyTwoWeekHigh: w52High,
+        fiftyTwoWeekLow: w52Low,
+        lastFetched: Date.now(),
+        error: null,
+    };
+}
 
 // ---- Data Fetching ----
 
 async function fetchQuote(symbol) {
+    // If demo mode, return simulated data
+    if (useDemoData) {
+        return generateDemoQuote(symbol);
+    }
+
     // Route through local proxy to avoid CORS issues
     const url = `/api/yahoo/v8/finance/chart/${encodeURIComponent(symbol)}?range=5d&interval=1d&includePrePost=false`;
     try {
         const resp = await fetch(url);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const json = await resp.json();
+
+        // Check for API error
+        if (json.error || !json.chart || !json.chart.result) {
+            throw new Error('Invalid API response');
+        }
+
         const result = json.chart.result[0];
         const meta = result.meta;
         const quotes = result.indicators.quote[0];
@@ -91,12 +190,29 @@ async function fetchQuote(symbol) {
             error: null,
         };
     } catch (err) {
+        // On first failure, switch to demo mode for all subsequent fetches
+        if (!useDemoData) {
+            console.warn('Live API unavailable, switching to demo mode:', err.message);
+            useDemoData = true;
+            showDemoBanner();
+            return generateDemoQuote(symbol);
+        }
         return {
             symbol,
             error: err.message,
             lastFetched: Date.now(),
         };
     }
+}
+
+function showDemoBanner() {
+    if (document.getElementById('demoBanner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'demoBanner';
+    banner.style.cssText = 'background:#1e293b;color:#f59e0b;text-align:center;padding:8px 16px;font-size:0.82rem;border:1px solid #f59e0b33;border-radius:8px;margin-bottom:16px;';
+    banner.textContent = 'DEMO MODE — Showing simulated data. Run with internet access for live quotes.';
+    const app = document.querySelector('.app');
+    app.insertBefore(banner, app.querySelector('.controls'));
 }
 
 function computeVolatility(returns) {
