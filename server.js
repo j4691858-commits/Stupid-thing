@@ -54,4 +54,5 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
     console.log(`Stock Tracker running at http://localhost:${PORT}`);
+    node server.js
 });
