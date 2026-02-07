@@ -13,8 +13,8 @@ let refreshTimer = null;
 // ---- Data Fetching ----
 
 async function fetchQuote(symbol) {
-    // Use Yahoo Finance v8 API via public endpoint
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=5d&interval=1d&includePrePost=false`;
+    // Route through local proxy to avoid CORS issues
+    const url = `/api/yahoo/v8/finance/chart/${encodeURIComponent(symbol)}?range=5d&interval=1d&includePrePost=false`;
     try {
         const resp = await fetch(url);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
