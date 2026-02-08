@@ -4,53 +4,194 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cookie Clicker</title>
-    <link rel="stylesheet" href="styles.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #2b1a0e;
+            color: #f5e6d3;
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .left {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        #count { font-size: 3rem; font-weight: 800; color: #ffd700; }
+        #cps { color: #c4a882; font-size: 0.95rem; }
+
+        #cookie {
+            font-size: 160px;
+            cursor: pointer;
+            user-select: none;
+            transition: transform 0.1s;
+            filter: drop-shadow(0 0 20px rgba(200,140,50,0.4));
+        }
+        #cookie:hover { transform: scale(1.05); }
+        #cookie:active { transform: scale(0.93); }
+
+        .float {
+            position: fixed;
+            font-weight: 800;
+            color: #ffd700;
+            font-size: 1.3rem;
+            pointer-events: none;
+            animation: rise 0.8s ease-out forwards;
+        }
+        @keyframes rise {
+            to { opacity: 0; transform: translateY(-80px); }
+        }
+
+        .right {
+            width: 360px;
+            background: #1e1008;
+            border-left: 1px solid #3d2a18;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        h2 { color: #ffd700; font-size: 0.85rem; letter-spacing: 1px; margin-bottom: 10px; }
+
+        .item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            margin-bottom: 6px;
+            background: #3a2415;
+            border: 1px solid #4d3320;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: 0.15s;
+        }
+        .item:hover { background: #4d3320; transform: translateX(-2px); }
+        .item.cant { opacity: 0.4; cursor: not-allowed; }
+        .item.cant:hover { transform: none; background: #3a2415; }
+        .item .icon { font-size: 1.8rem; width: 40px; text-align: center; }
+        .item .info { flex: 1; }
+        .item .name { font-weight: 700; font-size: 0.9rem; }
+        .item .cost { color: #ffd700; font-size: 0.8rem; margin-top: 2px; }
+        .item .cost.red { color: #ff6666; }
+        .item .owned { font-size: 1.4rem; font-weight: 800; color: #8b7355; }
+    </style>
 </head>
 <body>
-    <div class="game">
-        <div class="left-panel">
-            <div class="stats">
-                <div class="cookie-count" id="cookieCount">0</div>
-                <div class="cookie-label">cookies</div>
-                <div class="cps" id="cps">per second: 0</div>
-            </div>
-
-            <div class="cookie-area" id="cookieArea">
-                <div class="cookie-btn" id="bigCookie">
-                    <div class="cookie-inner">&#127850;</div>
-                </div>
-            </div>
-
-            <div class="click-power">
-                Click power: <span id="clickPower">1</span>
-            </div>
-        </div>
-
-        <div class="right-panel">
-            <div class="panel-tabs">
-                <button class="tab active" data-tab="buildings" onclick="switchTab('buildings')">Buildings</button>
-                <button class="tab" data-tab="upgrades" onclick="switchTab('upgrades')">Upgrades</button>
-                <button class="tab" data-tab="stats" onclick="switchTab('stats')">Stats</button>
-            </div>
-
-            <div class="tab-content" id="tab-buildings">
-                <div id="buildingList" class="building-list"></div>
-            </div>
-
-            <div class="tab-content hidden" id="tab-upgrades">
-                <div id="upgradeList" class="upgrade-list"></div>
-            </div>
-
-            <div class="tab-content hidden" id="tab-stats">
-                <div class="stats-panel" id="statsPanel"></div>
-            </div>
-        </div>
+    <div class="left">
+        <div id="count">0</div>
+        <div id="cps">per second: 0</div>
+        <div id="cookie">&#127850;</div>
+    </div>
+    <div class="right">
+        <h2>BUILDINGS</h2>
+        <div id="shop"></div>
     </div>
 
-    <div class="golden-cookie hidden" id="goldenCookie">&#11088;</div>
+    <script>
+        let cookies = 0, totalCookies = 0, cps = 0;
 
-    <div class="save-indicator hidden" id="saveIndicator">Game saved!</div>
+        const buildings = [
+            { name: 'Cursor',   icon: '&#128433;', cost: 15,      baseCps: 0.1,  owned: 0 },
+            { name: 'Grandma',  icon: '&#128117;', cost: 100,     baseCps: 1,    owned: 0 },
+            { name: 'Farm',     icon: '&#127806;', cost: 1100,    baseCps: 8,    owned: 0 },
+            { name: 'Mine',     icon: '&#9935;',   cost: 12000,   baseCps: 47,   owned: 0 },
+            { name: 'Factory',  icon: '&#127981;', cost: 130000,  baseCps: 260,  owned: 0 },
+            { name: 'Bank',     icon: '&#127974;', cost: 1400000, baseCps: 1400, owned: 0 },
+        ];
 
-    <script src="app.js"></script>
+        function fmt(n) {
+            if (n < 1000) return Math.floor(n).toString();
+            if (n < 1e6) return (n/1e3).toFixed(1) + 'K';
+            if (n < 1e9) return (n/1e6).toFixed(1) + 'M';
+            if (n < 1e12) return (n/1e9).toFixed(1) + 'B';
+            return (n/1e12).toFixed(1) + 'T';
+        }
+
+        function price(b) {
+            return Math.ceil(b.cost * Math.pow(1.15, b.owned));
+        }
+
+        function recalc() {
+            cps = buildings.reduce((s, b) => s + b.baseCps * b.owned, 0);
+        }
+
+        // Click
+        document.getElementById('cookie').addEventListener('click', e => {
+            cookies++; totalCookies++;
+            const f = document.createElement('div');
+            f.className = 'float';
+            f.textContent = '+1';
+            f.style.left = e.clientX - 10 + 'px';
+            f.style.top = e.clientY - 10 + 'px';
+            document.body.appendChild(f);
+            setTimeout(() => f.remove(), 800);
+            render();
+        });
+
+        // Buy
+        function buy(i) {
+            const b = buildings[i], p = price(b);
+            if (cookies < p) return;
+            cookies -= p;
+            b.owned++;
+            recalc();
+            render();
+        }
+
+        // Render
+        function render() {
+            document.getElementById('count').textContent = fmt(cookies);
+            document.getElementById('cps').textContent = 'per second: ' + (cps < 10 ? cps.toFixed(1) : fmt(cps));
+
+            const shop = document.getElementById('shop');
+            shop.innerHTML = buildings.map((b, i) => {
+                const p = price(b);
+                const can = cookies >= p;
+                return `<div class="item ${can ? '' : 'cant'}" onclick="buy(${i})">
+                    <div class="icon">${b.icon}</div>
+                    <div class="info">
+                        <div class="name">${b.name}</div>
+                        <div class="cost ${can ? '' : 'red'}">${fmt(p)} cookies</div>
+                    </div>
+                    <div class="owned">${b.owned}</div>
+                </div>`;
+            }).join('');
+        }
+
+        // Game loop
+        let last = Date.now();
+        function tick() {
+            const now = Date.now(), dt = (now - last) / 1000;
+            last = now;
+            if (cps > 0) { cookies += cps * dt; totalCookies += cps * dt; }
+            render();
+            requestAnimationFrame(tick);
+        }
+
+        // Save/load
+        function save() {
+            localStorage.setItem('cc', JSON.stringify({ cookies, totalCookies, owned: buildings.map(b => b.owned) }));
+        }
+        function load() {
+            try {
+                const d = JSON.parse(localStorage.getItem('cc'));
+                if (!d) return;
+                cookies = d.cookies; totalCookies = d.totalCookies;
+                d.owned.forEach((n, i) => { if (buildings[i]) buildings[i].owned = n; });
+                recalc();
+            } catch(e) {}
+        }
+        setInterval(save, 15000);
+
+        load();
+        render();
+        requestAnimationFrame(tick);
+    </script>
 </body>
 </html>
