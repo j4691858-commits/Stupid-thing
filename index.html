@@ -3,101 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Stock Market Tracker</title>
+    <title>Cookie Clicker</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="app">
-        <header>
-            <div class="header-left">
-                <h1>Stock Market Tracker</h1>
-                <span class="subtitle">Live Analysis &amp; Ranking</span>
+    <div class="game">
+        <div class="left-panel">
+            <div class="stats">
+                <div class="cookie-count" id="cookieCount">0</div>
+                <div class="cookie-label">cookies</div>
+                <div class="cps" id="cps">per second: 0</div>
             </div>
-            <div class="header-right">
-                <div class="market-status" id="marketStatus">
-                    <span class="status-dot"></span>
-                    <span class="status-text">Connecting...</span>
+
+            <div class="cookie-area" id="cookieArea">
+                <div class="cookie-btn" id="bigCookie">
+                    <div class="cookie-inner">&#127850;</div>
                 </div>
-                <div class="last-updated" id="lastUpdated">--</div>
             </div>
-        </header>
 
-        <div class="controls">
-            <div class="search-bar">
-                <input type="text" id="symbolInput" placeholder="Add stock symbol (e.g. AAPL, TSLA)" autocomplete="off">
-                <button id="addBtn" onclick="addSymbol()">+ Add</button>
-            </div>
-            <div class="control-group">
-                <label for="sortBy">Rank by:</label>
-                <select id="sortBy" onchange="renderStocks()">
-                    <option value="compositeScore">Composite Score</option>
-                    <option value="changePercent">% Change</option>
-                    <option value="volume">Volume</option>
-                    <option value="marketCap">Market Cap</option>
-                    <option value="momentum">Momentum</option>
-                    <option value="volatility">Volatility</option>
-                </select>
-                <button class="refresh-btn" onclick="fetchAllStocks()">Refresh</button>
-                <label class="auto-refresh-label">
-                    <input type="checkbox" id="autoRefresh" checked onchange="toggleAutoRefresh()">
-                    Auto (30s)
-                </label>
+            <div class="click-power">
+                Click power: <span id="clickPower">1</span>
             </div>
         </div>
 
-        <div class="market-overview" id="marketOverview">
-            <div class="overview-card" id="overviewSP500">
-                <span class="overview-label">S&amp;P 500</span>
-                <span class="overview-value">--</span>
-                <span class="overview-change">--</span>
+        <div class="right-panel">
+            <div class="panel-tabs">
+                <button class="tab active" data-tab="buildings" onclick="switchTab('buildings')">Buildings</button>
+                <button class="tab" data-tab="upgrades" onclick="switchTab('upgrades')">Upgrades</button>
+                <button class="tab" data-tab="stats" onclick="switchTab('stats')">Stats</button>
             </div>
-            <div class="overview-card" id="overviewDow">
-                <span class="overview-label">DOW</span>
-                <span class="overview-value">--</span>
-                <span class="overview-change">--</span>
-            </div>
-            <div class="overview-card" id="overviewNasdaq">
-                <span class="overview-label">NASDAQ</span>
-                <span class="overview-value">--</span>
-                <span class="overview-change">--</span>
-            </div>
-            <div class="overview-card" id="overviewVIX">
-                <span class="overview-label">VIX</span>
-                <span class="overview-value">--</span>
-                <span class="overview-change">--</span>
-            </div>
-        </div>
 
-        <div class="stock-grid" id="stockGrid">
-            <div class="loading-state" id="loadingState">
-                <div class="spinner"></div>
-                <p>Loading stock data...</p>
+            <div class="tab-content" id="tab-buildings">
+                <div id="buildingList" class="building-list"></div>
             </div>
-        </div>
 
-        <div class="ranking-table-container">
-            <h2>Stock Rankings</h2>
-            <table class="ranking-table" id="rankingTable">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Symbol</th>
-                        <th>Price</th>
-                        <th>Change</th>
-                        <th>Volume</th>
-                        <th>Mkt Cap</th>
-                        <th>Momentum</th>
-                        <th>Volatility</th>
-                        <th>Score</th>
-                        <th>Signal</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody id="rankingBody">
-                </tbody>
-            </table>
+            <div class="tab-content hidden" id="tab-upgrades">
+                <div id="upgradeList" class="upgrade-list"></div>
+            </div>
+
+            <div class="tab-content hidden" id="tab-stats">
+                <div class="stats-panel" id="statsPanel"></div>
+            </div>
         </div>
     </div>
+
+    <div class="golden-cookie hidden" id="goldenCookie">&#11088;</div>
+
+    <div class="save-indicator hidden" id="saveIndicator">Game saved!</div>
 
     <script src="app.js"></script>
 </body>
