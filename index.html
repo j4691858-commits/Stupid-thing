@@ -130,87 +130,66 @@ const LEVELS = [
     { name: 'All-Star', timeMod: 0.6, greenMod: 0.6 },
 ];
 const SHOTS = [
-    { name: 'Free Throw', z: 4.5, baseGreen: 45, speed: 2.5 },
-    { name: 'Floater', z: 5.5, baseGreen: 38, speed: 3.0 },
-    { name: 'Mid-Range', z: 7, baseGreen: 32, speed: 3.5 },
-    { name: 'Three Pointer', z: 9, baseGreen: 26, speed: 4.0 },
-    { name: 'Deep Three', z: 12, baseGreen: 20, speed: 4.8 },
-    { name: 'Half Court', z: 18, baseGreen: 15, speed: 5.5 },
-    { name: '3/4 Court', z: 26, baseGreen: 10, speed: 6.5 },
-    { name: 'Full Court', z: 35, baseGreen: 7, speed: 7.5 },
+    { name: 'Free Throw',    px: 5.8,  baseGreen: 45, speed: 2.5 },
+    { name: 'Floater',       px: 7,    baseGreen: 38, speed: 3.0 },
+    { name: 'Mid-Range',     px: 9,    baseGreen: 32, speed: 3.5 },
+    { name: 'Three Pointer', px: 11.5, baseGreen: 26, speed: 4.0 },
+    { name: 'Deep Three',    px: 14,   baseGreen: 20, speed: 4.8 },
+    { name: 'Half Court',    px: 18,   baseGreen: 15, speed: 5.5 },
+    { name: '3/4 Court',     px: 24,   baseGreen: 10, speed: 6.5 },
+    { name: 'Full Court',    px: 30,   baseGreen: 7,  speed: 7.5 },
 ];
 
 let selectedPlayer = null, selectedLevel = null;
 let score = 0, shotIndex = 0, timeLeft = 0;
 let needlePos = 0, needleDir = 1, greenStart = 0, greenWidth = 0, needleSpeed = 0;
 let timerInterval = null, shooting = false, waitingNext = false, gameActive = false;
+let ballAnim = null;
 
-// Ball animation
-let ballAnim = null; // { t, duration, startZ, hit, msg, color }
+// ===========================================
+// 3D SIDE-VIEW (TV BROADCAST) PROJECTION
+// ===========================================
+// World: X = along court (0=baseline/hoop, 32=far baseline)
+//        Y = up
+//        Z = across court width (-7.5 to 7.5), 0 = center
+// Camera: side of court, elevated, looking across
 
-// --- 3D Projection ---
-const CAM_Y = 3;
-const CAM_Z = -2;
-const FOV = 500;
+const CAM = { x: 14, y: 7, z: -20 };
+const LOOK = { x: 14, y: 1.5, z: 0 };
 
-function project(x3, y3, z3) {
-    const rz = z3 - CAM_Z;
-    if (rz <= 0.1) return null;
-    const scale = FOV / rz;
-    const sx = W / 2 + x3 * scale;
-    const sy = H * 0.55 - (y3 - CAM_Y) * scale;
-    return { x: sx, y: sy, s: scale };
+function project(wx, wy, wz) {
+    const dx = wx - CAM.x;
+    const dy = wy - CAM.y;
+    const dz = wz - CAM.z;
+
+    const fwd_x = LOOK.x - CAM.x;
+    const fwd_y = LOOK.y - CAM.y;
+    const fwd_z = LOOK.z - CAM.z;
+    const fLen = Math.sqrt(fwd_x * fwd_x + fwd_y * fwd_y + fwd_z * fwd_z);
+    const fx = fwd_x / fLen, fy = fwd_y / fLen, fz = fwd_z / fLen;
+
+    const rx = fy * 0 - 0 * fz, ry = 0, rz = 0;
+    const rMag = Math.sqrt(fx * fx + fz * fz);
+    const right_x = fz / rMag;
+    const right_y = 0;
+    const right_z = -fx / rMag;
+
+    const up_x = right_y * fz - right_z * fy;
+    const up_y = right_z * fx - right_x * fz;
+    const up_z = right_x * fy - right_y * fx;
+
+    const cz = dx * fx + dy * fy + dz * fz;
+    if (cz < 0.5) return null;
+    const cx = dx * right_x + dy * right_y + dz * right_z;
+    const cy = dx * up_x + dy * up_y + dz * up_z;
+
+    const fov = Math.min(W, H) * 0.9;
+    const sx = W / 2 + (cx / cz) * fov;
+    const sy = H / 2 - (cy / cz) * fov;
+    return { x: sx, y: sy, s: fov / cz };
 }
 
-// --- Draw 3D Court ---
-function drawCourt() {
-    // Floor
-    const courtLen = 36;
-    const courtW = 7.5;
-    const corners3d = [
-        [-courtW, 0, 0], [courtW, 0, 0],
-        [courtW, 0, courtLen], [-courtW, 0, courtLen]
-    ];
-    const corners = corners3d.map(c => project(c[0], c[1], c[2]));
-    if (corners.some(c => !c)) return;
-
-    ctx.fillStyle = '#b5651d';
-    ctx.beginPath();
-    ctx.moveTo(corners[0].x, corners[0].y);
-    corners.forEach(c => ctx.lineTo(c.x, c.y));
-    ctx.closePath();
-    ctx.fill();
-
-    // Court lines
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-    ctx.lineWidth = 1.5;
-
-    // Sidelines
-    drawLine3d(-courtW, 0, 0, -courtW, 0, courtLen);
-    drawLine3d(courtW, 0, 0, courtW, 0, courtLen);
-    drawLine3d(-courtW, 0, 0, courtW, 0, 0);
-    drawLine3d(-courtW, 0, courtLen, courtW, 0, courtLen);
-
-    // Half court
-    drawLine3d(-courtW, 0, courtLen / 2, courtW, 0, courtLen / 2);
-
-    // Center circle
-    drawCircle3d(0, 0, courtLen / 2, 1.8, 24);
-
-    // Free throw line
-    drawLine3d(-3, 0, 4.2, 3, 0, 4.2);
-
-    // Paint/key
-    drawLine3d(-3, 0, 0, -3, 0, 5.8);
-    drawLine3d(3, 0, 0, 3, 0, 5.8);
-
-    // Three point arc
-    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-    drawArc3d(0, 0, 0.8, 7.2, Math.PI * 0.15, Math.PI * 0.85, 30);
-    drawLine3d(-7, 0, 0, -7, 0, 1.2);
-    drawLine3d(7, 0, 0, 7, 0, 1.2);
-}
-
+// --- Drawing Helpers ---
 function drawLine3d(x1, y1, z1, x2, y2, z2) {
     const a = project(x1, y1, z1);
     const b = project(x2, y2, z2);
@@ -221,184 +200,411 @@ function drawLine3d(x1, y1, z1, x2, y2, z2) {
     ctx.stroke();
 }
 
-function drawCircle3d(cx, cy, cz, r, segs) {
+function drawPoly3d(points, fill, stroke) {
+    const projected = points.map(p => project(p[0], p[1], p[2]));
+    if (projected.some(p => !p)) return;
     ctx.beginPath();
+    ctx.moveTo(projected[0].x, projected[0].y);
+    for (let i = 1; i < projected.length; i++) ctx.lineTo(projected[i].x, projected[i].y);
+    ctx.closePath();
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); }
+}
+
+function drawEllipse3d(cx, cy, cz, rx, rz, segs, close) {
+    ctx.beginPath();
+    let first = true;
     for (let i = 0; i <= segs; i++) {
         const a = (i / segs) * Math.PI * 2;
-        const p = project(cx + Math.cos(a) * r, cy, cz + Math.sin(a) * r);
+        const p = project(cx + Math.cos(a) * rx, cy, cz + Math.sin(a) * rz);
         if (!p) continue;
-        if (i === 0) ctx.moveTo(p.x, p.y);
+        if (first) { ctx.moveTo(p.x, p.y); first = false; }
         else ctx.lineTo(p.x, p.y);
     }
+    if (close) ctx.closePath();
     ctx.stroke();
 }
 
-function drawArc3d(cx, cy, cz, r, a1, a2, segs) {
+function drawArc3dH(cx, cy, cz, rx, rz, a1, a2, segs) {
     ctx.beginPath();
+    let first = true;
     for (let i = 0; i <= segs; i++) {
         const a = a1 + (a2 - a1) * (i / segs);
-        const px = cx + Math.cos(a) * r;
-        const pz = cz + Math.sin(a) * r;
-        const p = project(px, cy, pz);
+        const p = project(cx + Math.cos(a) * rx, cy, cz + Math.sin(a) * rz);
         if (!p) continue;
-        if (i === 0) ctx.moveTo(p.x, p.y);
+        if (first) { ctx.moveTo(p.x, p.y); first = false; }
         else ctx.lineTo(p.x, p.y);
     }
     ctx.stroke();
 }
 
-// --- Draw Hoop (3D) ---
-function drawHoop() {
-    // Backboard
-    const bbLeft = project(-1.2, 3.8, 0.2);
-    const bbRight = project(1.2, 3.8, 0.2);
-    const bbTopL = project(-1.2, 4.8, 0.2);
-    const bbTopR = project(1.2, 4.8, 0.2);
-    if (bbLeft && bbRight && bbTopL && bbTopR) {
-        ctx.fillStyle = 'rgba(220,220,220,0.6)';
-        ctx.strokeStyle = '#aaa';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(bbLeft.x, bbLeft.y);
-        ctx.lineTo(bbRight.x, bbRight.y);
-        ctx.lineTo(bbTopR.x, bbTopR.y);
-        ctx.lineTo(bbTopL.x, bbTopL.y);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-    }
+// ===========================================
+// DRAW COURT (TV broadcast view)
+// ===========================================
+// NBA court: ~28.65m long, ~15.24m wide
+const CL = 32; // court length
+const CW = 7.5; // court half-width
 
-    // Rim
-    ctx.strokeStyle = '#ff4400';
-    ctx.lineWidth = 3;
-    drawCircle3d(0, 3.05, 0.9, 0.45, 16);
+function drawCourt() {
+    // Court floor
+    drawPoly3d(
+        [[0, 0, -CW], [CL, 0, -CW], [CL, 0, CW], [0, 0, CW]],
+        '#b5651d', null
+    );
 
-    // Net lines
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    // Wood grain lines
+    ctx.strokeStyle = 'rgba(160,100,50,0.15)';
     ctx.lineWidth = 1;
-    for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * Math.PI * 2;
-        const rx = Math.cos(a) * 0.45;
-        const rz = Math.sin(a) * 0.45;
-        drawLine3d(rx, 3.05, 0.9 + rz, rx * 0.3, 2.2, 0.9 + rz * 0.3);
+    for (let z = -CW + 0.5; z < CW; z += 0.8) {
+        drawLine3d(0, 0.01, z, CL, 0.01, z);
     }
 
-    // Pole
-    ctx.strokeStyle = '#888';
-    ctx.lineWidth = 3;
-    drawLine3d(0, 0, 0.15, 0, 4.8, 0.15);
+    // Court boundary
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = 2;
+    drawLine3d(0, 0, -CW, CL, 0, -CW);
+    drawLine3d(0, 0, CW, CL, 0, CW);
+    drawLine3d(0, 0, -CW, 0, 0, CW);
+    drawLine3d(CL, 0, -CW, CL, 0, CW);
+
+    // Half court line
+    drawLine3d(CL / 2, 0, -CW, CL / 2, 0, CW);
+
+    // Center circle
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1.5;
+    drawEllipse3d(CL / 2, 0.01, 0, 1.8, 1.8, 32, true);
+
+    // === LEFT HOOP SIDE (near baseline x=0) ===
+
+    // Paint / key (lane)
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 1.5;
+    drawLine3d(0, 0, -3, 5.8, 0, -3);
+    drawLine3d(0, 0, 3, 5.8, 0, 3);
+    drawLine3d(5.8, 0, -3, 5.8, 0, 3);
+
+    // Paint fill
+    drawPoly3d(
+        [[0.1, 0.005, -2.9], [5.7, 0.005, -2.9], [5.7, 0.005, 2.9], [0.1, 0.005, 2.9]],
+        'rgba(180,50,50,0.2)', null
+    );
+
+    // Free throw circle
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    drawEllipse3d(5.8, 0.01, 0, 1.8, 1.8, 32, true);
+
+    // Three-point line (left side)
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1.5;
+    drawLine3d(0, 0, -CW + 0.9, 1.6, 0, -CW + 0.9);
+    drawLine3d(0, 0, CW - 0.9, 1.6, 0, CW - 0.9);
+    drawArc3dH(1.6, 0.01, 0, 7.2, 7.2, -Math.PI * 0.42, Math.PI * 0.42, 40);
+
+    // Restricted area arc
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    drawArc3dH(1.6, 0.01, 0, 1.2, 1.2, -Math.PI * 0.5, Math.PI * 0.5, 16);
+
+    // === RIGHT HOOP SIDE (far baseline, x=CL) ===
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.lineWidth = 1.2;
+    drawLine3d(CL, 0, -3, CL - 5.8, 0, -3);
+    drawLine3d(CL, 0, 3, CL - 5.8, 0, 3);
+    drawLine3d(CL - 5.8, 0, -3, CL - 5.8, 0, 3);
+    drawEllipse3d(CL - 5.8, 0.01, 0, 1.8, 1.8, 32, true);
+    drawLine3d(CL, 0, -CW + 0.9, CL - 1.6, 0, -CW + 0.9);
+    drawLine3d(CL, 0, CW - 0.9, CL - 1.6, 0, CW - 0.9);
+    drawArc3dH(CL - 1.6, 0.01, 0, 7.2, 7.2, Math.PI * 0.58, Math.PI * 1.42, 40);
 }
 
-// --- Draw Player ---
-function drawPlayer(pz) {
-    const foot = project(0, 0, pz);
-    const hip = project(0, 1, pz);
-    const shoulder = project(0, 1.8, pz);
-    const head = project(0, 2.3, pz);
-    const handR = project(0.5, 2, pz - 0.3);
-    const handL = project(-0.4, 1.5, pz);
+// ===========================================
+// DRAW HOOP (left side, x≈1.2)
+// ===========================================
+const HOOP_X = 1.2;
+const RIM_Y = 3.05;
 
-    if (!foot || !hip || !shoulder || !head || !handR || !handL) return;
+function drawHoop() {
+    // Pole
+    ctx.strokeStyle = '#777';
+    ctx.lineWidth = 3;
+    drawLine3d(0.15, 0, 0, 0.15, 4.2, 0);
 
-    ctx.strokeStyle = '#ff6b35';
-    ctx.lineWidth = 4;
+    // Backboard
+    ctx.lineWidth = 2;
+    drawPoly3d(
+        [[0.3, 2.5, -0.9], [0.3, 2.5, 0.9], [0.3, 4.2, 0.9], [0.3, 4.2, -0.9]],
+        'rgba(200,200,220,0.45)', 'rgba(200,200,200,0.7)'
+    );
+
+    // Backboard square
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1;
+    drawPoly3d(
+        [[0.32, 2.8, -0.45], [0.32, 2.8, 0.45], [0.32, 3.5, 0.45], [0.32, 3.5, -0.45]],
+        null, 'rgba(255,255,255,0.4)'
+    );
+
+    // Rim
+    ctx.strokeStyle = '#ee3300';
+    ctx.lineWidth = 3;
+    drawEllipse3d(HOOP_X, RIM_Y, 0, 0.45, 0.45, 16, true);
+
+    // Net
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2;
+        const nx = HOOP_X + Math.cos(a) * 0.45;
+        const nz = Math.sin(a) * 0.45;
+        drawLine3d(nx, RIM_Y, nz, HOOP_X + Math.cos(a) * 0.15, RIM_Y - 0.6, Math.sin(a) * 0.15);
+    }
+}
+
+// ===========================================
+// DRAW PLAYER (stick figure, side view)
+// ===========================================
+function drawPlayer(px) {
+    const pz = 0;
+    const facing = -1; // facing left toward hoop
+
     ctx.lineCap = 'round';
 
-    // Legs
-    const footL = project(-0.3, 0, pz);
-    const footR = project(0.3, 0, pz);
-    if (footL && footR) {
-        ctx.beginPath(); ctx.moveTo(footL.x, footL.y); ctx.lineTo(hip.x, hip.y); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(footR.x, footR.y); ctx.lineTo(hip.x, hip.y); ctx.stroke();
+    // Feet
+    const footSpread = 0.3;
+    const fL = project(px - footSpread * facing, 0, pz - 0.15);
+    const fR = project(px + footSpread * facing, 0, pz + 0.15);
+    const hip = project(px, 1.0, pz);
+    const shldr = project(px, 1.7, pz);
+    const head = project(px - 0.1 * facing, 2.2, pz);
+    const handShoot = project(px - 0.6 * facing, 2.3, pz);
+    const handOff = project(px + 0.2 * facing, 1.3, pz);
+
+    if (!fL || !fR || !hip || !shldr || !head || !handShoot || !handOff) return;
+
+    // Shadow
+    const sh1 = project(px - 0.5, 0.01, pz - 0.3);
+    const sh2 = project(px + 0.5, 0.01, pz + 0.3);
+    if (sh1 && sh2) {
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.beginPath();
+        ctx.ellipse((sh1.x + sh2.x) / 2, (sh1.y + sh2.y) / 2,
+            Math.abs(sh2.x - sh1.x) / 2, Math.abs(sh2.y - sh1.y) / 2 + 3, 0, 0, Math.PI * 2);
+        ctx.fill();
     }
 
-    // Body
-    ctx.lineWidth = 5;
-    ctx.beginPath(); ctx.moveTo(hip.x, hip.y); ctx.lineTo(shoulder.x, shoulder.y); ctx.stroke();
+    // Legs
+    ctx.strokeStyle = '#ff6b35';
+    ctx.lineWidth = Math.max(shldr.s * 0.04, 3);
+    ctx.beginPath(); ctx.moveTo(fL.x, fL.y); ctx.lineTo(hip.x, hip.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(fR.x, fR.y); ctx.lineTo(hip.x, hip.y); ctx.stroke();
+
+    // Shorts
+    const shortsBot = project(px, 0.85, pz);
+    if (shortsBot) {
+        ctx.strokeStyle = '#cc4400';
+        ctx.lineWidth = Math.max(shldr.s * 0.07, 5);
+        ctx.beginPath(); ctx.moveTo(hip.x, hip.y); ctx.lineTo(shortsBot.x, shortsBot.y); ctx.stroke();
+    }
+
+    // Body / jersey
+    ctx.strokeStyle = '#ff6b35';
+    ctx.lineWidth = Math.max(shldr.s * 0.06, 4);
+    ctx.beginPath(); ctx.moveTo(hip.x, hip.y); ctx.lineTo(shldr.x, shldr.y); ctx.stroke();
 
     // Arms
-    ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(shoulder.x, shoulder.y); ctx.lineTo(handR.x, handR.y); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(shoulder.x, shoulder.y); ctx.lineTo(handL.x, handL.y); ctx.stroke();
+    ctx.lineWidth = Math.max(shldr.s * 0.03, 2.5);
+    ctx.strokeStyle = '#e8a070';
+    ctx.beginPath(); ctx.moveTo(shldr.x, shldr.y); ctx.lineTo(handShoot.x, handShoot.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(shldr.x, shldr.y); ctx.lineTo(handOff.x, handOff.y); ctx.stroke();
 
     // Head
-    const headSize = head.s * 0.3;
-    ctx.fillStyle = '#ff6b35';
+    const headR = Math.max(head.s * 0.18, 6);
+    ctx.fillStyle = '#e8a070';
     ctx.beginPath();
-    ctx.arc(head.x, head.y, Math.max(headSize, 6), 0, Math.PI * 2);
+    ctx.arc(head.x, head.y, headR, 0, Math.PI * 2);
     ctx.fill();
 
     // Jersey number
-    ctx.fillStyle = '#fff';
-    ctx.font = `bold ${Math.max(shoulder.s * 0.15, 8)}px sans-serif`;
-    ctx.textAlign = 'center';
-    const jersey = project(0, 1.4, pz);
-    if (jersey) ctx.fillText('23', jersey.x, jersey.y + 4);
+    const jpos = project(px, 1.35, pz);
+    if (jpos) {
+        ctx.fillStyle = '#fff';
+        ctx.font = `bold ${Math.max(Math.floor(shldr.s * 0.12), 7)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('23', jpos.x, jpos.y);
+    }
 }
 
-// --- Draw Basketball ---
-function drawBall(x3, y3, z3) {
-    const p = project(x3, y3, z3);
+// ===========================================
+// DRAW BASKETBALL
+// ===========================================
+function drawBall(bx, by, bz) {
+    const p = project(bx, by, bz);
     if (!p) return;
-    const r = Math.max(p.s * 0.12, 4);
+    const r = Math.max(p.s * 0.09, 4);
 
-    // Shadow on ground
-    const shadow = project(x3, 0, z3);
-    if (shadow) {
+    // Shadow
+    const sh = project(bx, 0.01, bz);
+    if (sh) {
         ctx.fillStyle = 'rgba(0,0,0,0.3)';
         ctx.beginPath();
-        ctx.ellipse(shadow.x, shadow.y, r * 0.8, r * 0.3, 0, 0, Math.PI * 2);
+        ctx.ellipse(sh.x, sh.y, r * 0.7, r * 0.25, 0, 0, Math.PI * 2);
         ctx.fill();
     }
 
     // Ball
     const grad = ctx.createRadialGradient(p.x - r * 0.3, p.y - r * 0.3, r * 0.1, p.x, p.y, r);
     grad.addColorStop(0, '#f5a623');
-    grad.addColorStop(0.7, '#d4781e');
+    grad.addColorStop(0.6, '#d4781e');
     grad.addColorStop(1, '#a05a10');
     ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
     ctx.fill();
 
-    // Seam lines
-    ctx.strokeStyle = 'rgba(80,40,0,0.5)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(p.x - r, p.y);
-    ctx.lineTo(p.x + r, p.y);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y - r);
-    ctx.lineTo(p.x, p.y + r);
-    ctx.stroke();
+    // Seams
+    ctx.strokeStyle = 'rgba(80,40,0,0.4)';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.moveTo(p.x - r, p.y); ctx.lineTo(p.x + r, p.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(p.x, p.y - r); ctx.lineTo(p.x, p.y + r); ctx.stroke();
 }
 
-// --- Ball trajectory ---
-function getBallPos(t, startZ, hit) {
-    const endZ = 0.9;
-    const z = startZ + (endZ - startZ) * t;
-    const x = hit ? 0 : (Math.sin(t * 3) * 1.5);
-    const dist = startZ - endZ;
-    const peakH = 3.5 + dist * 0.35;
-    const y = 2 + peakH * 4 * t * (1 - t);
-    if (!hit && t > 0.85) {
-        return { x: x + (t - 0.85) * 8, y: y - (t - 0.85) * 15, z };
+// --- Ball trajectory (side view: arcs from player x toward hoop x) ---
+function getBallPos(t, startX, hit) {
+    const endX = HOOP_X;
+    const endY = RIM_Y;
+    const x = startX + (endX - startX) * t;
+    const dist = startX - endX;
+    const peakY = RIM_Y + 1.5 + dist * 0.15;
+    const y = 2.2 + (peakY - 2.2) * 4 * t * (1 - t) + (endY - 2.2) * t;
+    let z = 0;
+    if (!hit && t > 0.82) {
+        const bounce = (t - 0.82) * 5;
+        return { x: x - bounce * 2, y: y - bounce * 4, z: z + bounce * 3 };
     }
     return { x, y, z };
 }
 
-// --- Draw Timing Bar ---
-function drawTimingBar() {
-    const barW = 320, barH = 44;
-    const bx = W / 2 - barW / 2;
-    const by = H - 100;
+// ===========================================
+// DRAW ARENA BACKGROUND
+// ===========================================
+function drawBackground() {
+    // Dark arena
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, '#050510');
+    sky.addColorStop(0.3, '#0c0c22');
+    sky.addColorStop(1, '#0a0a18');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
 
-    // Background
-    ctx.fillStyle = '#1a1a2e';
+    // Arena lights (overhead)
+    for (let i = 0; i < 6; i++) {
+        const lx = W * 0.1 + (W * 0.8) * (i / 5);
+        const ly = H * 0.03;
+        const grad = ctx.createRadialGradient(lx, ly, 0, lx, ly, 100);
+        grad.addColorStop(0, 'rgba(255,240,200,0.12)');
+        grad.addColorStop(1, 'rgba(255,240,200,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(lx - 100, ly - 50, 200, 200);
+        ctx.fillStyle = 'rgba(255,255,220,0.7)';
+        ctx.fillRect(lx - 6, ly, 12, 4);
+    }
+
+    // Far-side crowd (behind court, upper area)
+    const crowdTop = H * 0.12;
+    for (let row = 0; row < 8; row++) {
+        const y = crowdTop + row * 14;
+        const density = 80;
+        for (let i = 0; i < density; i++) {
+            const x = (i / density) * W + Math.sin(i * 7.3 + row * 4.1) * 5;
+            const hue = (i * 41 + row * 70) % 360;
+            const bright = 25 + row * 3;
+            ctx.fillStyle = `hsla(${hue}, 40%, ${bright}%, 0.5)`;
+            ctx.fillRect(x, y, 7, 9);
+            ctx.fillStyle = `hsla(${hue}, 25%, ${bright + 15}%, 0.6)`;
+            ctx.beginPath();
+            ctx.arc(x + 3.5, y - 2.5, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    // Scoreboard
+    const sbx = W / 2, sby = H * 0.04;
+    ctx.fillStyle = 'rgba(20,20,40,0.8)';
+    ctx.beginPath();
+    ctx.roundRect(sbx - 80, sby, 160, 28, 6);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,200,50,0.4)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Light glow on court
+    const courtGlow = ctx.createRadialGradient(W * 0.4, H * 0.5, 0, W * 0.4, H * 0.5, W * 0.5);
+    courtGlow.addColorStop(0, 'rgba(255,240,200,0.06)');
+    courtGlow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = courtGlow;
+    ctx.fillRect(0, 0, W, H);
+}
+
+// ===========================================
+// DRAW TV OVERLAY / HUD
+// ===========================================
+function drawHUD() {
+    // Scorebug (bottom left, like ESPN)
+    const bw = 280, bh = 50;
+    const bx = 20, by = H - 160;
+
+    ctx.fillStyle = 'rgba(15,15,30,0.85)';
+    ctx.beginPath();
+    ctx.roundRect(bx, by, bw, bh, 8);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,100,50,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Score
+    ctx.font = 'bold 18px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffd700';
+    ctx.fillText('SCORE', bx + 12, by + 18);
+    ctx.font = 'bold 24px sans-serif';
+    ctx.fillText(score.toString(), bx + 80, by + 18);
+
+    // Shot name
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillStyle = '#ff6b35';
+    const shot = SHOTS[shotIndex];
+    ctx.fillText(shot ? shot.name.toUpperCase() : '', bx + 12, by + 40);
+
+    // Timer
+    ctx.fillStyle = 'rgba(15,15,30,0.85)';
+    ctx.beginPath();
+    ctx.roundRect(bx + bw + 8, by, 80, bh, 8);
+    ctx.fill();
+    ctx.strokeStyle = timeLeft < 5 ? 'rgba(255,50,50,0.7)' : 'rgba(255,100,50,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.font = 'bold 26px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = timeLeft < 5 ? '#ff2222' : '#fff';
+    ctx.fillText(timeLeft.toFixed(1), bx + bw + 48, by + bh / 2 + 2);
+
+    // Shot counter (top right)
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillText(`Shot ${Math.min(shotIndex + 1, SHOTS.length)} of ${SHOTS.length}`, W - 20, 30);
+}
+
+// --- Timing Bar ---
+function drawTimingBar() {
+    const barW = 340, barH = 40;
+    const bx = W / 2 - barW / 2;
+    const by = H - 70;
+
+    ctx.fillStyle = 'rgba(15,15,30,0.85)';
     ctx.strokeStyle = '#444';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -408,17 +614,11 @@ function drawTimingBar() {
 
     // Green zone
     ctx.fillStyle = 'rgba(0,200,80,0.3)';
-    ctx.fillRect(bx + greenStart, by, greenWidth, barH);
+    ctx.fillRect(bx + greenStart, by + 1, greenWidth, barH - 2);
     ctx.strokeStyle = '#0f0';
     ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(bx + greenStart, by);
-    ctx.lineTo(bx + greenStart, by + barH);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(bx + greenStart + greenWidth, by);
-    ctx.lineTo(bx + greenStart + greenWidth, by + barH);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bx + greenStart, by); ctx.lineTo(bx + greenStart, by + barH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bx + greenStart + greenWidth, by); ctx.lineTo(bx + greenStart + greenWidth, by + barH); ctx.stroke();
 
     // Needle
     if (!waitingNext) {
@@ -429,105 +629,39 @@ function drawTimingBar() {
         ctx.shadowBlur = 0;
     }
 
-    // Label
-    ctx.fillStyle = '#888';
-    ctx.font = '13px sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.font = '12px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('Click / Tap / Press SPACE when the line is in the green!', W / 2, by + barH + 22);
+    ctx.textBaseline = 'top';
+    ctx.fillText('SPACE / Click / Tap when the line is in the green', W / 2, by + barH + 6);
 }
 
-// --- Draw HUD ---
-function drawHUD() {
-    // Top bar gradient
-    const grad = ctx.createLinearGradient(0, 0, 0, 80);
-    grad.addColorStop(0, 'rgba(0,0,0,0.7)');
-    grad.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, 80);
-
-    ctx.font = 'bold 22px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#ffd700';
-    ctx.fillText('Score: ' + score, 24, 35);
-
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#ff6b35';
-    const shot = SHOTS[shotIndex];
-    ctx.fillText(shot ? shot.name : '', W / 2, 35);
-
-    ctx.textAlign = 'right';
-    ctx.fillStyle = timeLeft < 5 ? '#ff2222' : '#ff4444';
-    ctx.font = 'bold 28px monospace';
-    ctx.fillText(timeLeft.toFixed(1), W - 24, 38);
-}
-
-// --- Draw Feedback Text ---
+// --- Feedback ---
 let feedbackText = '', feedbackColor = '#fff', feedbackTimer = 0;
-
 function showFeedback(msg, color) {
-    feedbackText = msg;
-    feedbackColor = color;
-    feedbackTimer = 60;
+    feedbackText = msg; feedbackColor = color; feedbackTimer = 60;
 }
-
 function drawFeedback() {
     if (feedbackTimer <= 0) return;
     feedbackTimer--;
     const alpha = Math.min(feedbackTimer / 20, 1);
-    const scale = 1 + (60 - feedbackTimer) * 0.005;
+    const sc = 1 + (60 - feedbackTimer) * 0.004;
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.font = `bold ${Math.floor(48 * scale)}px sans-serif`;
+    ctx.font = `bold ${Math.floor(52 * sc)}px sans-serif`;
     ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     ctx.fillStyle = feedbackColor;
     ctx.shadowColor = feedbackColor;
-    ctx.shadowBlur = 20;
-    ctx.fillText(feedbackText, W / 2, H * 0.35);
+    ctx.shadowBlur = 25;
+    ctx.fillText(feedbackText, W / 2, H * 0.38);
     ctx.restore();
     ctx.shadowBlur = 0;
 }
 
-// --- Draw Crowd (background) ---
-function drawBackground() {
-    // Dark gradient sky
-    const sky = ctx.createLinearGradient(0, 0, 0, H * 0.5);
-    sky.addColorStop(0, '#050510');
-    sky.addColorStop(1, '#0f0f2a');
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, W, H);
-
-    // Arena lights
-    for (let i = 0; i < 5; i++) {
-        const lx = W * 0.15 + (W * 0.7) * (i / 4);
-        const ly = H * 0.06;
-        const grad = ctx.createRadialGradient(lx, ly, 0, lx, ly, 120);
-        grad.addColorStop(0, 'rgba(255,240,200,0.15)');
-        grad.addColorStop(1, 'rgba(255,240,200,0)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(lx - 120, ly - 120, 240, 240);
-
-        ctx.fillStyle = '#ffd';
-        ctx.fillRect(lx - 8, ly - 3, 16, 6);
-    }
-
-    // Crowd rows
-    const crowdY = H * 0.25;
-    for (let row = 0; row < 4; row++) {
-        const y = crowdY + row * 18;
-        for (let i = 0; i < 60; i++) {
-            const x = (i / 60) * W + Math.sin(i * 7 + row * 3) * 6;
-            const hue = (i * 37 + row * 90) % 360;
-            ctx.fillStyle = `hsla(${hue}, 50%, 40%, 0.6)`;
-            ctx.fillRect(x, y, 8, 10);
-            ctx.fillStyle = `hsla(${hue}, 30%, 60%, 0.7)`;
-            ctx.beginPath();
-            ctx.arc(x + 4, y - 3, 4, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    }
-}
-
-// --- Menu ---
+// ===========================================
+// MENU
+// ===========================================
 const playerDiv = document.getElementById('playerPicks');
 PLAYERS.forEach((p, i) => {
     const b = document.createElement('button');
@@ -548,11 +682,12 @@ function checkReady() {
     document.getElementById('startBtn').disabled = selectedPlayer === null || selectedLevel === null;
 }
 
-// --- Game Logic ---
+// ===========================================
+// GAME LOGIC
+// ===========================================
 function startGame() {
     score = 0; shotIndex = 0; timeLeft = 24.0;
-    gameActive = true;
-    ballAnim = null;
+    gameActive = true; ballAnim = null;
     document.getElementById('menu').classList.add('hidden');
     document.getElementById('result').classList.add('hidden');
     setupShot();
@@ -568,7 +703,7 @@ function getGreenWidth(shot) {
 
 function setupShot() {
     const shot = SHOTS[shotIndex];
-    const barW = 320;
+    const barW = 340;
     greenWidth = getGreenWidth(shot);
     needleSpeed = shot.speed / LEVELS[selectedLevel].timeMod;
     greenStart = Math.random() * (barW - greenWidth - 20) + 10;
@@ -588,12 +723,9 @@ function startTimer() {
 function shoot() {
     if (shooting || waitingNext || !gameActive) return;
     shooting = true;
-
     const hit = needlePos >= greenStart && needlePos <= greenStart + greenWidth;
     const shot = SHOTS[shotIndex];
-
-    // Start ball animation
-    ballAnim = { t: 0, duration: 50, startZ: shot.z, hit };
+    ballAnim = { t: 0, duration: 55, startX: shot.px, hit };
 
     if (hit) {
         const dist = needlePos - greenStart;
@@ -604,21 +736,17 @@ function shoot() {
         else if (accuracy > 0.5) { msg = 'SWISH!'; color = '#44dd44'; }
         else { msg = 'Good!'; color = '#88cc44'; }
 
-        setTimeout(() => {
-            showFeedback(msg, color);
-            score++;
-        }, 700);
-
+        setTimeout(() => { showFeedback(msg, color); score++; }, 750);
         waitingNext = true;
         setTimeout(() => {
             shotIndex++;
             if (shotIndex >= SHOTS.length) endGame(true);
             else setupShot();
-        }, 1400);
+        }, 1500);
     } else {
-        setTimeout(() => showFeedback('MISS!', '#ff4444'), 700);
+        setTimeout(() => showFeedback('MISS!', '#ff4444'), 750);
         waitingNext = true;
-        setTimeout(() => setupShot(), 1400);
+        setTimeout(() => setupShot(), 1500);
     }
 }
 
@@ -655,62 +783,49 @@ function showMenu() {
 document.addEventListener('keydown', e => {
     if (e.code === 'Space') { e.preventDefault(); shoot(); }
 });
-canvas.addEventListener('click', e => {
-    if (!gameActive) return;
-    const barW = 320, barH = 44;
-    const bx = W / 2 - barW / 2, by = H - 100;
-    if (e.clientX >= bx && e.clientX <= bx + barW && e.clientY >= by - 20 && e.clientY <= by + barH + 20) {
-        shoot();
-    } else {
-        shoot();
-    }
-});
+canvas.addEventListener('click', () => { if (gameActive) shoot(); });
 canvas.addEventListener('touchstart', e => { e.preventDefault(); if (gameActive) shoot(); });
 
-// --- Main Loop ---
+// ===========================================
+// MAIN LOOP
+// ===========================================
 function loop() {
     ctx.clearRect(0, 0, W, H);
 
-    if (!gameActive) {
-        drawBackground();
-        drawCourt();
-        drawHoop();
-        drawPlayer(8);
-        drawBall(0.5, 2.1, 8);
-        requestAnimationFrame(loop);
-        return;
-    }
-
     drawBackground();
     drawCourt();
-    drawHoop();
 
     const shot = SHOTS[shotIndex];
-    const pz = shot ? shot.z : 8;
+    const px = shot ? shot.px : 8;
 
-    // Player
-    drawPlayer(pz);
+    if (gameActive) {
+        drawPlayer(px);
 
-    // Ball in hand or animating
-    if (ballAnim) {
-        ballAnim.t += 1 / ballAnim.duration;
-        if (ballAnim.t > 1) ballAnim.t = 1;
-        const bp = getBallPos(ballAnim.t, ballAnim.startZ, ballAnim.hit);
-        drawBall(bp.x, bp.y, bp.z);
+        if (ballAnim) {
+            ballAnim.t += 1 / ballAnim.duration;
+            if (ballAnim.t > 1) ballAnim.t = 1;
+            const bp = getBallPos(ballAnim.t, ballAnim.startX, ballAnim.hit);
+            drawBall(bp.x, bp.y, bp.z);
+        } else {
+            drawBall(px - 0.5, 2.3, 0);
+        }
+
+        drawHoop();
+
+        if (!shooting && !waitingNext) {
+            needlePos += needleDir * needleSpeed;
+            if (needlePos >= 337) { needlePos = 337; needleDir = -1; }
+            if (needlePos <= 0) { needlePos = 0; needleDir = 1; }
+        }
+
+        drawTimingBar();
+        drawHUD();
+        drawFeedback();
     } else {
-        drawBall(0.5, 2.1, pz);
+        drawPlayer(8);
+        drawBall(7.5, 2.3, 0);
+        drawHoop();
     }
-
-    // Needle movement
-    if (!shooting && !waitingNext) {
-        needlePos += needleDir * needleSpeed;
-        if (needlePos >= 317) { needlePos = 317; needleDir = -1; }
-        if (needlePos <= 0) { needlePos = 0; needleDir = 1; }
-    }
-
-    drawTimingBar();
-    drawHUD();
-    drawFeedback();
 
     requestAnimationFrame(loop);
 }
