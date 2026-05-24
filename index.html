@@ -168,15 +168,14 @@ function project(wx, wy, wz) {
     const fLen = Math.sqrt(fwd_x * fwd_x + fwd_y * fwd_y + fwd_z * fwd_z);
     const fx = fwd_x / fLen, fy = fwd_y / fLen, fz = fwd_z / fLen;
 
-    const rx = fy * 0 - 0 * fz, ry = 0, rz = 0;
     const rMag = Math.sqrt(fx * fx + fz * fz);
-    const right_x = fz / rMag;
+    const right_x = -fz / rMag;
     const right_y = 0;
-    const right_z = -fx / rMag;
+    const right_z = fx / rMag;
 
-    const up_x = right_y * fz - right_z * fy;
-    const up_y = right_z * fx - right_x * fz;
-    const up_z = right_x * fy - right_y * fx;
+    const up_x = fy * right_z - fz * right_y;
+    const up_y = fz * right_x - fx * right_z;
+    const up_z = fx * right_y - fy * right_x;
 
     const cz = dx * fx + dy * fy + dz * fz;
     if (cz < 0.5) return null;
