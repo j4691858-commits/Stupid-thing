@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Beat the Buzzer</title>
+    <title>Beat the Buzzer 3D</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            background: #1a1a2e;
+            background: #0a0a1a;
             font-family: 'Segoe UI', sans-serif;
             color: #fff;
             height: 100vh;
@@ -16,8 +16,9 @@
             align-items: center;
             overflow: hidden;
         }
+        canvas { display: block; }
 
-        #menu, #game, #result {
+        #menu, #result {
             position: absolute;
             width: 100%;
             height: 100%;
@@ -26,6 +27,8 @@
             align-items: center;
             justify-content: center;
             gap: 18px;
+            background: rgba(10,10,26,0.92);
+            z-index: 20;
         }
         .hidden { display: none !important; }
 
@@ -44,15 +47,13 @@
             letter-spacing: 2px;
             margin-top: 10px;
         }
-
         .choices {
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
             justify-content: center;
-            max-width: 600px;
+            max-width: 650px;
         }
-
         .btn {
             padding: 12px 22px;
             border: 2px solid #333;
@@ -67,123 +68,13 @@
         .btn:hover { border-color: #ff6b35; color: #fff; background: #1a2744; transform: scale(1.05); }
         .btn.selected { border-color: #ff6b35; background: #2a1a0a; color: #ff6b35; }
         .btn.go {
-            background: #ff6b35;
-            color: #fff;
-            border-color: #ff6b35;
-            font-size: 1.1rem;
-            padding: 14px 40px;
-            margin-top: 10px;
+            background: #ff6b35; color: #fff; border-color: #ff6b35;
+            font-size: 1.1rem; padding: 14px 40px; margin-top: 10px;
         }
         .btn.go:hover { background: #e55a28; }
         .btn.go:disabled { opacity: 0.3; cursor: not-allowed; }
-
         .player-rating { font-size: 0.7rem; color: #888; margin-top: 2px; }
 
-        /* HUD */
-        #hud {
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 16px 24px;
-            background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);
-            z-index: 10;
-        }
-        #hud div { font-size: 1rem; font-weight: 700; }
-        #hud .shot-name { color: #ff6b35; font-size: 1.2rem; }
-        #hud .score-display { color: #ffd700; font-size: 1.3rem; }
-        #hud .timer { color: #ff4444; font-size: 1.5rem; font-family: monospace; }
-
-        /* Court */
-        #court {
-            width: 360px;
-            height: 200px;
-            background: #c47a3a;
-            border: 3px solid #8b5e2a;
-            border-radius: 8px;
-            position: relative;
-            margin-bottom: 10px;
-        }
-        .court-line {
-            position: absolute;
-            background: #fff;
-            opacity: 0.5;
-        }
-        .half-line { width: 100%; height: 2px; top: 50%; }
-        .three-arc {
-            width: 140px; height: 70px;
-            border: 2px solid rgba(255,255,255,0.5);
-            border-radius: 0 0 70px 70px;
-            border-top: none;
-            background: none;
-            position: absolute;
-            bottom: 0;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-        .hoop {
-            position: absolute;
-            bottom: 8px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 20px; height: 20px;
-            border: 3px solid #ff4444;
-            border-radius: 50%;
-        }
-        .backboard {
-            position: absolute;
-            bottom: 26px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 40px; height: 4px;
-            background: #ddd;
-        }
-        .player-dot {
-            position: absolute;
-            width: 16px; height: 16px;
-            background: #ff6b35;
-            border: 2px solid #fff;
-            border-radius: 50%;
-            left: 50%;
-            transform: translateX(-50%);
-            transition: bottom 0.4s ease;
-        }
-
-        /* Timing bar */
-        #timing {
-            width: 320px;
-            height: 50px;
-            background: #222;
-            border-radius: 8px;
-            position: relative;
-            border: 2px solid #444;
-            overflow: hidden;
-            cursor: pointer;
-        }
-        #greenZone {
-            position: absolute;
-            height: 100%;
-            background: rgba(0,200,80,0.35);
-            border-left: 2px solid #0f0;
-            border-right: 2px solid #0f0;
-        }
-        #needle {
-            position: absolute;
-            top: 0;
-            width: 3px;
-            height: 100%;
-            background: #fff;
-            box-shadow: 0 0 8px #fff;
-            transition: none;
-        }
-        #timing-label {
-            font-size: 0.8rem;
-            color: #888;
-            margin-top: 4px;
-        }
-
-        /* Result screen */
         #result h1 { font-size: 3rem; }
         .result-sub { color: #aaa; font-size: 1.1rem; }
         .result-score { color: #ffd700; font-size: 2rem; font-weight: 800; margin: 10px 0; }
@@ -191,46 +82,18 @@
 </head>
 <body>
 
-<!-- MENU -->
+<canvas id="c"></canvas>
+
 <div id="menu">
     <h1>BEAT THE BUZZER</h1>
     <h2>Make every shot before time runs out</h2>
-
     <div class="pick-label">Choose Your Player</div>
     <div class="choices" id="playerPicks"></div>
-
     <div class="pick-label">Choose Your Level</div>
     <div class="choices" id="levelPicks"></div>
-
     <button class="btn go" id="startBtn" disabled onclick="startGame()">START</button>
 </div>
 
-<!-- GAME -->
-<div id="game" class="hidden">
-    <div id="hud">
-        <div class="score-display">Score: <span id="scoreNum">0</span></div>
-        <div class="shot-name" id="shotName">Free Throw</div>
-        <div class="timer" id="timer">24.0</div>
-    </div>
-
-    <div id="court">
-        <div class="court-line half-line"></div>
-        <div class="three-arc"></div>
-        <div class="backboard"></div>
-        <div class="hoop"></div>
-        <div class="player-dot" id="playerDot"></div>
-    </div>
-
-    <div id="shotLabel" style="font-size:1.1rem; color:#ff6b35; font-weight:700; margin-bottom:4px;"></div>
-    <div id="timing">
-        <div id="greenZone"></div>
-        <div id="needle"></div>
-    </div>
-    <div id="timing-label">Click / Tap / Press SPACE when the line is in the green!</div>
-    <div id="feedback" style="font-size:1.4rem; font-weight:800; height:30px; margin-top:6px;"></div>
-</div>
-
-<!-- RESULT -->
 <div id="result" class="hidden">
     <h1 id="resultTitle">BUZZER!</h1>
     <div class="result-sub" id="resultSub"></div>
@@ -239,241 +102,620 @@
 </div>
 
 <script>
-    // --- Data ---
-    const PLAYERS = [
-        { name: 'Caleb Wilson',  rating: 60 },
-        { name: 'Cam Boozer',    rating: 72 },
-        { name: 'Jalen Brunson', rating: 85 },
-        { name: 'Luka Doncic',   rating: 90 },
-        { name: 'Wemby',         rating: 93 },
-        { name: 'Shai Gilgeous-Alexander', rating: 96 },
-        { name: 'LeBron James',  rating: 97 },
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H;
+
+function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// --- Data ---
+const PLAYERS = [
+    { name: 'Caleb Wilson', rating: 60 },
+    { name: 'Cam Boozer', rating: 72 },
+    { name: 'Jalen Brunson', rating: 85 },
+    { name: 'Luka Doncic', rating: 90 },
+    { name: 'Wemby', rating: 93 },
+    { name: 'Shai Gilgeous-Alexander', rating: 96 },
+    { name: 'LeBron James', rating: 97 },
+];
+const LEVELS = [
+    { name: 'High School', timeMod: 1.3, greenMod: 1.3 },
+    { name: 'College', timeMod: 1.0, greenMod: 1.0 },
+    { name: 'NBA', timeMod: 0.8, greenMod: 0.8 },
+    { name: 'All-Star', timeMod: 0.6, greenMod: 0.6 },
+];
+const SHOTS = [
+    { name: 'Free Throw', z: 4.5, baseGreen: 45, speed: 2.5 },
+    { name: 'Floater', z: 5.5, baseGreen: 38, speed: 3.0 },
+    { name: 'Mid-Range', z: 7, baseGreen: 32, speed: 3.5 },
+    { name: 'Three Pointer', z: 9, baseGreen: 26, speed: 4.0 },
+    { name: 'Deep Three', z: 12, baseGreen: 20, speed: 4.8 },
+    { name: 'Half Court', z: 18, baseGreen: 15, speed: 5.5 },
+    { name: '3/4 Court', z: 26, baseGreen: 10, speed: 6.5 },
+    { name: 'Full Court', z: 35, baseGreen: 7, speed: 7.5 },
+];
+
+let selectedPlayer = null, selectedLevel = null;
+let score = 0, shotIndex = 0, timeLeft = 0;
+let needlePos = 0, needleDir = 1, greenStart = 0, greenWidth = 0, needleSpeed = 0;
+let timerInterval = null, shooting = false, waitingNext = false, gameActive = false;
+
+// Ball animation
+let ballAnim = null; // { t, duration, startZ, hit, msg, color }
+
+// --- 3D Projection ---
+const CAM_Y = 3;
+const CAM_Z = -2;
+const FOV = 500;
+
+function project(x3, y3, z3) {
+    const rz = z3 - CAM_Z;
+    if (rz <= 0.1) return null;
+    const scale = FOV / rz;
+    const sx = W / 2 + x3 * scale;
+    const sy = H * 0.55 - (y3 - CAM_Y) * scale;
+    return { x: sx, y: sy, s: scale };
+}
+
+// --- Draw 3D Court ---
+function drawCourt() {
+    // Floor
+    const courtLen = 36;
+    const courtW = 7.5;
+    const corners3d = [
+        [-courtW, 0, 0], [courtW, 0, 0],
+        [courtW, 0, courtLen], [-courtW, 0, courtLen]
     ];
+    const corners = corners3d.map(c => project(c[0], c[1], c[2]));
+    if (corners.some(c => !c)) return;
 
-    const LEVELS = [
-        { name: 'High School', timeMod: 1.3, greenMod: 1.3 },
-        { name: 'College',     timeMod: 1.0, greenMod: 1.0 },
-        { name: 'NBA',         timeMod: 0.8, greenMod: 0.8 },
-        { name: 'All-Star',    timeMod: 0.6, greenMod: 0.6 },
-    ];
+    ctx.fillStyle = '#b5651d';
+    ctx.beginPath();
+    ctx.moveTo(corners[0].x, corners[0].y);
+    corners.forEach(c => ctx.lineTo(c.x, c.y));
+    ctx.closePath();
+    ctx.fill();
 
-    const SHOTS = [
-        { name: 'Free Throw',   dist: 20,  baseGreen: 45, speed: 2.5 },
-        { name: 'Floater',      dist: 30,  baseGreen: 38, speed: 3.0 },
-        { name: 'Mid-Range',    dist: 45,  baseGreen: 32, speed: 3.5 },
-        { name: 'Three Pointer',dist: 65,  baseGreen: 26, speed: 4.0 },
-        { name: 'Deep Three',   dist: 78,  baseGreen: 20, speed: 4.8 },
-        { name: 'Half Court',   dist: 100, baseGreen: 15, speed: 5.5 },
-        { name: '3/4 Court',    dist: 140, baseGreen: 10, speed: 6.5 },
-        { name: 'Full Court',   dist: 180, baseGreen: 7,  speed: 7.5 },
-    ];
+    // Court lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1.5;
 
-    let selectedPlayer = null, selectedLevel = null;
-    let score = 0, shotIndex = 0, timeLeft = 0;
-    let needlePos = 0, needleDir = 1, greenStart = 0, greenWidth = 0, needleSpeed = 0;
-    let animFrame = null, timerInterval = null, shooting = false, waitingNext = false;
+    // Sidelines
+    drawLine3d(-courtW, 0, 0, -courtW, 0, courtLen);
+    drawLine3d(courtW, 0, 0, courtW, 0, courtLen);
+    drawLine3d(-courtW, 0, 0, courtW, 0, 0);
+    drawLine3d(-courtW, 0, courtLen, courtW, 0, courtLen);
 
-    // --- Build Menu ---
-    const playerDiv = document.getElementById('playerPicks');
-    PLAYERS.forEach((p, i) => {
-        const b = document.createElement('button');
-        b.className = 'btn';
-        b.innerHTML = p.name + `<div class="player-rating">OVR ${p.rating}</div>`;
-        b.onclick = () => pickPlayer(i);
-        playerDiv.appendChild(b);
-    });
+    // Half court
+    drawLine3d(-courtW, 0, courtLen / 2, courtW, 0, courtLen / 2);
 
-    const levelDiv = document.getElementById('levelPicks');
-    LEVELS.forEach((l, i) => {
-        const b = document.createElement('button');
-        b.className = 'btn';
-        b.textContent = l.name;
-        b.onclick = () => pickLevel(i);
-        levelDiv.appendChild(b);
-    });
+    // Center circle
+    drawCircle3d(0, 0, courtLen / 2, 1.8, 24);
 
-    function pickPlayer(i) {
-        selectedPlayer = i;
-        playerDiv.querySelectorAll('.btn').forEach((b, j) => b.classList.toggle('selected', j === i));
-        checkReady();
+    // Free throw line
+    drawLine3d(-3, 0, 4.2, 3, 0, 4.2);
+
+    // Paint/key
+    drawLine3d(-3, 0, 0, -3, 0, 5.8);
+    drawLine3d(3, 0, 0, 3, 0, 5.8);
+
+    // Three point arc
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    drawArc3d(0, 0, 0.8, 7.2, Math.PI * 0.15, Math.PI * 0.85, 30);
+    drawLine3d(-7, 0, 0, -7, 0, 1.2);
+    drawLine3d(7, 0, 0, 7, 0, 1.2);
+}
+
+function drawLine3d(x1, y1, z1, x2, y2, z2) {
+    const a = project(x1, y1, z1);
+    const b = project(x2, y2, z2);
+    if (!a || !b) return;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+}
+
+function drawCircle3d(cx, cy, cz, r, segs) {
+    ctx.beginPath();
+    for (let i = 0; i <= segs; i++) {
+        const a = (i / segs) * Math.PI * 2;
+        const p = project(cx + Math.cos(a) * r, cy, cz + Math.sin(a) * r);
+        if (!p) continue;
+        if (i === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
     }
-    function pickLevel(i) {
-        selectedLevel = i;
-        levelDiv.querySelectorAll('.btn').forEach((b, j) => b.classList.toggle('selected', j === i));
-        checkReady();
+    ctx.stroke();
+}
+
+function drawArc3d(cx, cy, cz, r, a1, a2, segs) {
+    ctx.beginPath();
+    for (let i = 0; i <= segs; i++) {
+        const a = a1 + (a2 - a1) * (i / segs);
+        const px = cx + Math.cos(a) * r;
+        const pz = cz + Math.sin(a) * r;
+        const p = project(px, cy, pz);
+        if (!p) continue;
+        if (i === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
     }
-    function checkReady() {
-        document.getElementById('startBtn').disabled = selectedPlayer === null || selectedLevel === null;
-    }
+    ctx.stroke();
+}
 
-    // --- Game ---
-    function startGame() {
-        score = 0;
-        shotIndex = 0;
-        timeLeft = 24.0;
-
-        show('game');
-        document.getElementById('scoreNum').textContent = '0';
-
-        setupShot();
-        startTimer();
-    }
-
-    function getGreenWidth(shot) {
-        const player = PLAYERS[selectedPlayer];
-        const level = LEVELS[selectedLevel];
-        const ratingBonus = (player.rating - 60) / 37 * 0.6 + 0.7;
-        return Math.max(shot.baseGreen * ratingBonus * level.greenMod, 5);
-    }
-
-    function getNeedleSpeed(shot) {
-        const level = LEVELS[selectedLevel];
-        return shot.speed / level.timeMod;
-    }
-
-    function setupShot() {
-        const shot = SHOTS[shotIndex];
-        const bar = document.getElementById('timing');
-        const barW = 320;
-
-        greenWidth = getGreenWidth(shot);
-        needleSpeed = getNeedleSpeed(shot);
-
-        greenStart = Math.random() * (barW - greenWidth - 20) + 10;
-
-        const gz = document.getElementById('greenZone');
-        gz.style.left = greenStart + 'px';
-        gz.style.width = greenWidth + 'px';
-
-        needlePos = 0;
-        needleDir = 1;
-        shooting = false;
-        waitingNext = false;
-
-        document.getElementById('shotName').textContent = shot.name;
-        document.getElementById('shotLabel').textContent = shot.name;
-        document.getElementById('feedback').textContent = '';
-
-        // Position player on court
-        const dot = document.getElementById('playerDot');
-        dot.style.bottom = Math.min(shot.dist, 180) + 'px';
-
-        startNeedle();
+// --- Draw Hoop (3D) ---
+function drawHoop() {
+    // Backboard
+    const bbLeft = project(-1.2, 3.8, 0.2);
+    const bbRight = project(1.2, 3.8, 0.2);
+    const bbTopL = project(-1.2, 4.8, 0.2);
+    const bbTopR = project(1.2, 4.8, 0.2);
+    if (bbLeft && bbRight && bbTopL && bbTopR) {
+        ctx.fillStyle = 'rgba(220,220,220,0.6)';
+        ctx.strokeStyle = '#aaa';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(bbLeft.x, bbLeft.y);
+        ctx.lineTo(bbRight.x, bbRight.y);
+        ctx.lineTo(bbTopR.x, bbTopR.y);
+        ctx.lineTo(bbTopL.x, bbTopL.y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
     }
 
-    function startNeedle() {
-        if (animFrame) cancelAnimationFrame(animFrame);
-        function tick() {
-            if (shooting || waitingNext) return;
-            needlePos += needleDir * needleSpeed;
-            if (needlePos >= 317) { needlePos = 317; needleDir = -1; }
-            if (needlePos <= 0) { needlePos = 0; needleDir = 1; }
-            document.getElementById('needle').style.left = needlePos + 'px';
-            animFrame = requestAnimationFrame(tick);
+    // Rim
+    ctx.strokeStyle = '#ff4400';
+    ctx.lineWidth = 3;
+    drawCircle3d(0, 3.05, 0.9, 0.45, 16);
+
+    // Net lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const rx = Math.cos(a) * 0.45;
+        const rz = Math.sin(a) * 0.45;
+        drawLine3d(rx, 3.05, 0.9 + rz, rx * 0.3, 2.2, 0.9 + rz * 0.3);
+    }
+
+    // Pole
+    ctx.strokeStyle = '#888';
+    ctx.lineWidth = 3;
+    drawLine3d(0, 0, 0.15, 0, 4.8, 0.15);
+}
+
+// --- Draw Player ---
+function drawPlayer(pz) {
+    const foot = project(0, 0, pz);
+    const hip = project(0, 1, pz);
+    const shoulder = project(0, 1.8, pz);
+    const head = project(0, 2.3, pz);
+    const handR = project(0.5, 2, pz - 0.3);
+    const handL = project(-0.4, 1.5, pz);
+
+    if (!foot || !hip || !shoulder || !head || !handR || !handL) return;
+
+    ctx.strokeStyle = '#ff6b35';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+
+    // Legs
+    const footL = project(-0.3, 0, pz);
+    const footR = project(0.3, 0, pz);
+    if (footL && footR) {
+        ctx.beginPath(); ctx.moveTo(footL.x, footL.y); ctx.lineTo(hip.x, hip.y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(footR.x, footR.y); ctx.lineTo(hip.x, hip.y); ctx.stroke();
+    }
+
+    // Body
+    ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(hip.x, hip.y); ctx.lineTo(shoulder.x, shoulder.y); ctx.stroke();
+
+    // Arms
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(shoulder.x, shoulder.y); ctx.lineTo(handR.x, handR.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(shoulder.x, shoulder.y); ctx.lineTo(handL.x, handL.y); ctx.stroke();
+
+    // Head
+    const headSize = head.s * 0.3;
+    ctx.fillStyle = '#ff6b35';
+    ctx.beginPath();
+    ctx.arc(head.x, head.y, Math.max(headSize, 6), 0, Math.PI * 2);
+    ctx.fill();
+
+    // Jersey number
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${Math.max(shoulder.s * 0.15, 8)}px sans-serif`;
+    ctx.textAlign = 'center';
+    const jersey = project(0, 1.4, pz);
+    if (jersey) ctx.fillText('23', jersey.x, jersey.y + 4);
+}
+
+// --- Draw Basketball ---
+function drawBall(x3, y3, z3) {
+    const p = project(x3, y3, z3);
+    if (!p) return;
+    const r = Math.max(p.s * 0.12, 4);
+
+    // Shadow on ground
+    const shadow = project(x3, 0, z3);
+    if (shadow) {
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.beginPath();
+        ctx.ellipse(shadow.x, shadow.y, r * 0.8, r * 0.3, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Ball
+    const grad = ctx.createRadialGradient(p.x - r * 0.3, p.y - r * 0.3, r * 0.1, p.x, p.y, r);
+    grad.addColorStop(0, '#f5a623');
+    grad.addColorStop(0.7, '#d4781e');
+    grad.addColorStop(1, '#a05a10');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Seam lines
+    ctx.strokeStyle = 'rgba(80,40,0,0.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(p.x - r, p.y);
+    ctx.lineTo(p.x + r, p.y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y - r);
+    ctx.lineTo(p.x, p.y + r);
+    ctx.stroke();
+}
+
+// --- Ball trajectory ---
+function getBallPos(t, startZ, hit) {
+    const endZ = 0.9;
+    const z = startZ + (endZ - startZ) * t;
+    const x = hit ? 0 : (Math.sin(t * 3) * 1.5);
+    const dist = startZ - endZ;
+    const peakH = 3.5 + dist * 0.35;
+    const y = 2 + peakH * 4 * t * (1 - t);
+    if (!hit && t > 0.85) {
+        return { x: x + (t - 0.85) * 8, y: y - (t - 0.85) * 15, z };
+    }
+    return { x, y, z };
+}
+
+// --- Draw Timing Bar ---
+function drawTimingBar() {
+    const barW = 320, barH = 44;
+    const bx = W / 2 - barW / 2;
+    const by = H - 100;
+
+    // Background
+    ctx.fillStyle = '#1a1a2e';
+    ctx.strokeStyle = '#444';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, barW, barH, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    // Green zone
+    ctx.fillStyle = 'rgba(0,200,80,0.3)';
+    ctx.fillRect(bx + greenStart, by, greenWidth, barH);
+    ctx.strokeStyle = '#0f0';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(bx + greenStart, by);
+    ctx.lineTo(bx + greenStart, by + barH);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(bx + greenStart + greenWidth, by);
+    ctx.lineTo(bx + greenStart + greenWidth, by + barH);
+    ctx.stroke();
+
+    // Needle
+    if (!waitingNext) {
+        ctx.fillStyle = '#fff';
+        ctx.shadowColor = '#fff';
+        ctx.shadowBlur = 10;
+        ctx.fillRect(bx + needlePos - 1.5, by, 3, barH);
+        ctx.shadowBlur = 0;
+    }
+
+    // Label
+    ctx.fillStyle = '#888';
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Click / Tap / Press SPACE when the line is in the green!', W / 2, by + barH + 22);
+}
+
+// --- Draw HUD ---
+function drawHUD() {
+    // Top bar gradient
+    const grad = ctx.createLinearGradient(0, 0, 0, 80);
+    grad.addColorStop(0, 'rgba(0,0,0,0.7)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, 80);
+
+    ctx.font = 'bold 22px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffd700';
+    ctx.fillText('Score: ' + score, 24, 35);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ff6b35';
+    const shot = SHOTS[shotIndex];
+    ctx.fillText(shot ? shot.name : '', W / 2, 35);
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = timeLeft < 5 ? '#ff2222' : '#ff4444';
+    ctx.font = 'bold 28px monospace';
+    ctx.fillText(timeLeft.toFixed(1), W - 24, 38);
+}
+
+// --- Draw Feedback Text ---
+let feedbackText = '', feedbackColor = '#fff', feedbackTimer = 0;
+
+function showFeedback(msg, color) {
+    feedbackText = msg;
+    feedbackColor = color;
+    feedbackTimer = 60;
+}
+
+function drawFeedback() {
+    if (feedbackTimer <= 0) return;
+    feedbackTimer--;
+    const alpha = Math.min(feedbackTimer / 20, 1);
+    const scale = 1 + (60 - feedbackTimer) * 0.005;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = `bold ${Math.floor(48 * scale)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = feedbackColor;
+    ctx.shadowColor = feedbackColor;
+    ctx.shadowBlur = 20;
+    ctx.fillText(feedbackText, W / 2, H * 0.35);
+    ctx.restore();
+    ctx.shadowBlur = 0;
+}
+
+// --- Draw Crowd (background) ---
+function drawBackground() {
+    // Dark gradient sky
+    const sky = ctx.createLinearGradient(0, 0, 0, H * 0.5);
+    sky.addColorStop(0, '#050510');
+    sky.addColorStop(1, '#0f0f2a');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
+
+    // Arena lights
+    for (let i = 0; i < 5; i++) {
+        const lx = W * 0.15 + (W * 0.7) * (i / 4);
+        const ly = H * 0.06;
+        const grad = ctx.createRadialGradient(lx, ly, 0, lx, ly, 120);
+        grad.addColorStop(0, 'rgba(255,240,200,0.15)');
+        grad.addColorStop(1, 'rgba(255,240,200,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(lx - 120, ly - 120, 240, 240);
+
+        ctx.fillStyle = '#ffd';
+        ctx.fillRect(lx - 8, ly - 3, 16, 6);
+    }
+
+    // Crowd rows
+    const crowdY = H * 0.25;
+    for (let row = 0; row < 4; row++) {
+        const y = crowdY + row * 18;
+        for (let i = 0; i < 60; i++) {
+            const x = (i / 60) * W + Math.sin(i * 7 + row * 3) * 6;
+            const hue = (i * 37 + row * 90) % 360;
+            ctx.fillStyle = `hsla(${hue}, 50%, 40%, 0.6)`;
+            ctx.fillRect(x, y, 8, 10);
+            ctx.fillStyle = `hsla(${hue}, 30%, 60%, 0.7)`;
+            ctx.beginPath();
+            ctx.arc(x + 4, y - 3, 4, 0, Math.PI * 2);
+            ctx.fill();
         }
-        animFrame = requestAnimationFrame(tick);
     }
+}
 
-    function startTimer() {
-        if (timerInterval) clearInterval(timerInterval);
-        timerInterval = setInterval(() => {
-            timeLeft -= 0.1;
-            if (timeLeft <= 0) {
-                timeLeft = 0;
-                clearInterval(timerInterval);
-                endGame();
-            }
-            document.getElementById('timer').textContent = timeLeft.toFixed(1);
-        }, 100);
-    }
+// --- Menu ---
+const playerDiv = document.getElementById('playerPicks');
+PLAYERS.forEach((p, i) => {
+    const b = document.createElement('button');
+    b.className = 'btn';
+    b.innerHTML = p.name + `<div class="player-rating">OVR ${p.rating}</div>`;
+    b.onclick = () => { selectedPlayer = i; playerDiv.querySelectorAll('.btn').forEach((bb, j) => bb.classList.toggle('selected', j === i)); checkReady(); };
+    playerDiv.appendChild(b);
+});
+const levelDiv = document.getElementById('levelPicks');
+LEVELS.forEach((l, i) => {
+    const b = document.createElement('button');
+    b.className = 'btn';
+    b.textContent = l.name;
+    b.onclick = () => { selectedLevel = i; levelDiv.querySelectorAll('.btn').forEach((bb, j) => bb.classList.toggle('selected', j === i)); checkReady(); };
+    levelDiv.appendChild(b);
+});
+function checkReady() {
+    document.getElementById('startBtn').disabled = selectedPlayer === null || selectedLevel === null;
+}
 
-    function shoot() {
-        if (shooting || waitingNext) return;
-        shooting = true;
+// --- Game Logic ---
+function startGame() {
+    score = 0; shotIndex = 0; timeLeft = 24.0;
+    gameActive = true;
+    ballAnim = null;
+    document.getElementById('menu').classList.add('hidden');
+    document.getElementById('result').classList.add('hidden');
+    setupShot();
+    startTimer();
+}
 
-        const hit = needlePos >= greenStart && needlePos <= greenStart + greenWidth;
-        const fb = document.getElementById('feedback');
+function getGreenWidth(shot) {
+    const player = PLAYERS[selectedPlayer];
+    const level = LEVELS[selectedLevel];
+    const ratingBonus = (player.rating - 60) / 37 * 0.6 + 0.7;
+    return Math.max(shot.baseGreen * ratingBonus * level.greenMod, 5);
+}
 
-        if (hit) {
-            const dist = needlePos - greenStart;
-            const center = greenWidth / 2;
-            const accuracy = 1 - Math.abs(dist - center) / center;
+function setupShot() {
+    const shot = SHOTS[shotIndex];
+    const barW = 320;
+    greenWidth = getGreenWidth(shot);
+    needleSpeed = shot.speed / LEVELS[selectedLevel].timeMod;
+    greenStart = Math.random() * (barW - greenWidth - 20) + 10;
+    needlePos = 0; needleDir = 1;
+    shooting = false; waitingNext = false;
+    ballAnim = null;
+}
 
-            let msg, color;
-            if (accuracy > 0.85) { msg = 'PERFECT!'; color = '#00ff88'; }
-            else if (accuracy > 0.5) { msg = 'SWISH!'; color = '#44dd44'; }
-            else { msg = 'Good!'; color = '#88cc44'; }
+function startTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+        timeLeft -= 0.1;
+        if (timeLeft <= 0) { timeLeft = 0; clearInterval(timerInterval); endGame(); }
+    }, 100);
+}
 
-            fb.textContent = msg;
-            fb.style.color = color;
+function shoot() {
+    if (shooting || waitingNext || !gameActive) return;
+    shooting = true;
+
+    const hit = needlePos >= greenStart && needlePos <= greenStart + greenWidth;
+    const shot = SHOTS[shotIndex];
+
+    // Start ball animation
+    ballAnim = { t: 0, duration: 50, startZ: shot.z, hit };
+
+    if (hit) {
+        const dist = needlePos - greenStart;
+        const center = greenWidth / 2;
+        const accuracy = 1 - Math.abs(dist - center) / center;
+        let msg, color;
+        if (accuracy > 0.85) { msg = 'PERFECT!'; color = '#00ff88'; }
+        else if (accuracy > 0.5) { msg = 'SWISH!'; color = '#44dd44'; }
+        else { msg = 'Good!'; color = '#88cc44'; }
+
+        setTimeout(() => {
+            showFeedback(msg, color);
             score++;
-            document.getElementById('scoreNum').textContent = score;
+        }, 700);
 
-            waitingNext = true;
-            setTimeout(() => {
-                shotIndex++;
-                if (shotIndex >= SHOTS.length) {
-                    endGame(true);
-                } else {
-                    setupShot();
-                }
-            }, 600);
-        } else {
-            fb.textContent = 'MISS!';
-            fb.style.color = '#ff4444';
+        waitingNext = true;
+        setTimeout(() => {
+            shotIndex++;
+            if (shotIndex >= SHOTS.length) endGame(true);
+            else setupShot();
+        }, 1400);
+    } else {
+        setTimeout(() => showFeedback('MISS!', '#ff4444'), 700);
+        waitingNext = true;
+        setTimeout(() => setupShot(), 1400);
+    }
+}
 
-            waitingNext = true;
-            setTimeout(() => {
-                setupShot();
-            }, 600);
-        }
+function endGame(allMade) {
+    gameActive = false;
+    if (timerInterval) clearInterval(timerInterval);
+    document.getElementById('result').classList.remove('hidden');
+    const title = document.getElementById('resultTitle');
+    const sub = document.getElementById('resultSub');
+    const sc = document.getElementById('resultScore');
+    const player = PLAYERS[selectedPlayer];
+    const level = LEVELS[selectedLevel];
+    if (allMade) {
+        title.textContent = 'YOU WIN!'; title.style.color = '#00ff88';
+        sub.textContent = `${player.name} hit every shot on ${level.name}!`;
+    } else {
+        title.textContent = 'BUZZER!'; title.style.color = '#ff4444';
+        sub.textContent = `Time's up! ${player.name} on ${level.name}`;
+    }
+    sc.textContent = score + ' / ' + SHOTS.length + ' shots made';
+}
+
+function showMenu() {
+    document.getElementById('result').classList.add('hidden');
+    document.getElementById('menu').classList.remove('hidden');
+    gameActive = false;
+    selectedPlayer = null; selectedLevel = null;
+    playerDiv.querySelectorAll('.btn').forEach(b => b.classList.remove('selected'));
+    levelDiv.querySelectorAll('.btn').forEach(b => b.classList.remove('selected'));
+    document.getElementById('startBtn').disabled = true;
+}
+
+// --- Input ---
+document.addEventListener('keydown', e => {
+    if (e.code === 'Space') { e.preventDefault(); shoot(); }
+});
+canvas.addEventListener('click', e => {
+    if (!gameActive) return;
+    const barW = 320, barH = 44;
+    const bx = W / 2 - barW / 2, by = H - 100;
+    if (e.clientX >= bx && e.clientX <= bx + barW && e.clientY >= by - 20 && e.clientY <= by + barH + 20) {
+        shoot();
+    } else {
+        shoot();
+    }
+});
+canvas.addEventListener('touchstart', e => { e.preventDefault(); if (gameActive) shoot(); });
+
+// --- Main Loop ---
+function loop() {
+    ctx.clearRect(0, 0, W, H);
+
+    if (!gameActive) {
+        drawBackground();
+        drawCourt();
+        drawHoop();
+        drawPlayer(8);
+        drawBall(0.5, 2.1, 8);
+        requestAnimationFrame(loop);
+        return;
     }
 
-    function endGame(allMade) {
-        if (timerInterval) clearInterval(timerInterval);
-        if (animFrame) cancelAnimationFrame(animFrame);
+    drawBackground();
+    drawCourt();
+    drawHoop();
 
-        show('result');
-        const title = document.getElementById('resultTitle');
-        const sub = document.getElementById('resultSub');
-        const sc = document.getElementById('resultScore');
+    const shot = SHOTS[shotIndex];
+    const pz = shot ? shot.z : 8;
 
-        const player = PLAYERS[selectedPlayer];
-        const level = LEVELS[selectedLevel];
+    // Player
+    drawPlayer(pz);
 
-        if (allMade) {
-            title.textContent = 'YOU WIN!';
-            title.style.color = '#00ff88';
-            sub.textContent = `${player.name} hit every shot on ${level.name}!`;
-        } else {
-            title.textContent = 'BUZZER!';
-            title.style.color = '#ff4444';
-            sub.textContent = `Time's up! ${player.name} on ${level.name}`;
-        }
-        sc.textContent = score + ' / ' + SHOTS.length + ' shots made';
+    // Ball in hand or animating
+    if (ballAnim) {
+        ballAnim.t += 1 / ballAnim.duration;
+        if (ballAnim.t > 1) ballAnim.t = 1;
+        const bp = getBallPos(ballAnim.t, ballAnim.startZ, ballAnim.hit);
+        drawBall(bp.x, bp.y, bp.z);
+    } else {
+        drawBall(0.5, 2.1, pz);
     }
 
-    function showMenu() {
-        show('menu');
-        selectedPlayer = null;
-        selectedLevel = null;
-        playerDiv.querySelectorAll('.btn').forEach(b => b.classList.remove('selected'));
-        levelDiv.querySelectorAll('.btn').forEach(b => b.classList.remove('selected'));
-        document.getElementById('startBtn').disabled = true;
+    // Needle movement
+    if (!shooting && !waitingNext) {
+        needlePos += needleDir * needleSpeed;
+        if (needlePos >= 317) { needlePos = 317; needleDir = -1; }
+        if (needlePos <= 0) { needlePos = 0; needleDir = 1; }
     }
 
-    function show(id) {
-        ['menu', 'game', 'result'].forEach(s => {
-            document.getElementById(s).classList.toggle('hidden', s !== id);
-        });
-    }
+    drawTimingBar();
+    drawHUD();
+    drawFeedback();
 
-    // --- Input ---
-    document.addEventListener('keydown', e => {
-        if (e.code === 'Space') { e.preventDefault(); shoot(); }
-    });
-    document.getElementById('timing').addEventListener('click', shoot);
-    document.getElementById('timing').addEventListener('touchstart', e => { e.preventDefault(); shoot(); });
+    requestAnimationFrame(loop);
+}
+
+requestAnimationFrame(loop);
 </script>
 </body>
 </html>
